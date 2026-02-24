@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WiFi Human Detection Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .container { display: flex; flex-direction: column; align-items: center; }
+        .status { font-size: 24px; margin: 20px; padding: 10px; border-radius: 5px; }
+        .present { background-color: #ffcccc; color: #cc0000; }
+        .absent { background-color: #ccffcc; color: #006600; }
+        .controls { margin: 20px; }
+        canvas { max-width: 800px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WiFi Human Detection Dashboard</h1>
+        
+        <div id="status" class="status absent">Human Absent</div>
+
+        <div class="controls">
+            <button onclick="toggleHuman(true)">Enter Room</button>
+            <button onclick="toggleHuman(false)">Leave Room</button>
+        </div>
+
+        <canvas id="rssiChart"></canvas>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('rssiChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Raw RSSI',
+                    data: [],
+                    borderColor: 'rgba(200, 200, 200, 0.5)',
+                    borderWidth: 1,
+                    fill: false
+                }, {
+                    label: 'Filtered RSSI',
+                    data: [],
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 2,
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    y: { min: -80, max: -30 }
+                }
+            }
+        });
+
+        function toggleHuman(present) {
+            fetch('/api/toggle_human', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ present: present })
+            });
+        }
+
+        async function updateData() {
+            const response = await fetch('/api/data');
+            const data = await response.json();
+            
+            if (data.length > 0) {
+                const latest = data[data.length - 1];
+                const statusDiv = document.getElementById('status');
+                if (latest.is_present) {
+                    statusDiv.innerText = "Human Detected!";
+                    statusDiv.className = "status present";
+                } else {
+                    statusDiv.innerText = "Human Absent";
+                    statusDiv.className = "status absent";
+                }
+
+                chart.data.labels = data.map(d => new Date(d.timestamp * 1000).toLocaleTimeString());
+                chart.data.datasets[0].data = data.map(d => d.raw_rssi);
+                chart.data.datasets[1].data = data.map(d => d.filtered_rssi);
+                chart.update('none');
+            }
+        }
+
+        setInterval(updateData, 500);
+    </script>
+</body>
+</html>
